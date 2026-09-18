@@ -1,6 +1,7 @@
 import streamlit as st
 import database
 from datetime import datetime
+import pandas as pd
 
 
 def show_portal():
@@ -20,11 +21,11 @@ def show_portal():
         return
 
     # =========================================================
-    # 📝 MAIN TASK LIST VIEW
+    # 📝 MAIN TASK LIST VIEW (Mobile-Responsive Layout Optimization)
     # =========================================================
     st.markdown("<h2 style='text-align: left;'>Heart System: Everyday Task Dashboard</h2>", unsafe_allow_html=True)
 
-    col_nav1, col_nav2 = st.columns(2)
+    col_nav1, col_nav2 = st.columns([1, 1])
     with col_nav2:
         if st.button("📈 Go to Analytics", use_container_width=True):
             st.session_state.view_analytics = True
@@ -37,6 +38,7 @@ def show_portal():
     if not raw_tasks:
         st.info("Your task ledger list is currently empty. Click the creation button below to log new objectives!")
     else:
+        # Core Pagination calculations
         tasks_per_page = 10
         total_tasks = len(raw_tasks)
         total_pages = (total_tasks + tasks_per_page - 1) // tasks_per_page
@@ -48,26 +50,42 @@ def show_portal():
         end_idx = start_idx + tasks_per_page
         paginated_tasks = raw_tasks[start_idx:end_idx]
 
-        ch1, ch2, ch3, ch4, ch5 = st.columns(5)
-        ch1.markdown("**Task Title**")
-        ch2.markdown("**Due Date**")
-        ch3.markdown("**Priority**")
-        ch4.markdown("**Create Date**")
-        ch5.markdown("**Category**")
-        st.write("---")
-
+        # 📱 OPTIMIZATION: Convert the data into a clean structure for unified rendering
+        tasks_list = []
         for task in paginated_tasks:
             t_id, t_title, t_due, t_priority, t_create, t_category, _, _, _, _ = task
-            c1, c2, c3, c4, c5 = st.columns(5)
+            tasks_list.append({
+                "Task ID": t_id,
+                "Task Title": t_title,
+                "Due Date": t_due,
+                "Priority": t_priority,
+                "Create Date": t_create,
+                "Category": t_category
+            })
 
-            if c1.button(t_title, key=f"btn_task_{t_id}", use_container_width=True):
-                st.session_state.selected_task_id = t_id
-                st.rerun()
+        df = pd.DataFrame(tasks_list)
 
-            c2.write(t_due)
-            c3.write(t_priority)
-            c4.write(t_create)
-            c5.write(t_category)
+        st.write("### 📝 Active Project Tasks")
+        st.info(
+            "📱 Mobile Users: You can scroll the table horizontally. Click on a task title cell row selection dropdown below to view or configure full rich detail parameters.")
+
+        # We render a clean, standard data sheet layout instead of structural horizontal text column blocks
+        # This keeps headers locked perfectly in place on mobile devices!
+        st.dataframe(
+            df[["Task Title", "Due Date", "Priority", "Create Date", "Category"]],
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # Clean mobile selector drawer block to view rich details without columns misalignment
+        st.write("---")
+        task_options = {t["Task Title"]: t["Task ID"] for t in tasks_list}
+        selected_task_title = st.selectbox("🔍 Select a specific task row line item to inspect/edit:",
+                                           ["-- Choose a Task --"] + list(task_options.keys()))
+
+        if selected_task_title != "-- Choose a Task --":
+            st.session_state.selected_task_id = task_options[selected_task_title]
+            st.rerun()
 
         if total_pages > 1:
             st.write("---")
@@ -77,7 +95,7 @@ def show_portal():
                 page_options,
                 index=st.session_state.current_page - 1
             )
-            new_page = int(selected_page_str.split(" "))
+            new_page = int(selected_page_str.split(" ")[1])
             if new_page != st.session_state.current_page:
                 st.session_state.current_page = new_page
                 st.rerun()
@@ -105,10 +123,10 @@ def show_portal():
                                        value="Please note in the case the following action was not complete setup appropriate follow-up")
             f_ref = st.text_input("Reference Target Link URL Address Path:", value="https://sample.com")
 
-            col_f1, col_f2, col_f3 = st.columns(3)
-            f_date = col_f1.date_input("Target Date Limit:", min_value=datetime.today().date())
-            f_priority = col_f2.selectbox("Priority Ranking Scale:", ["Low", "Medium", "High", "Critical"])
-            f_category = col_f3.selectbox("Pipeline Assignment Module:", [
+            # Form fields stack cleanly on mobile natively
+            f_date = st.date_input("Target Date Limit:", min_value=datetime.today().date())
+            f_priority = st.selectbox("Priority Ranking Scale:", ["Low", "Medium", "High", "Critical"])
+            f_category = st.selectbox("Pipeline Assignment Module:", [
                 "Job Applications", "MBA Studies", "MSc Studies", "Content Creation", "Misc Works"
             ])
 
@@ -133,7 +151,7 @@ def show_portal():
 def render_task_details_page():
     t_id = st.session_state.selected_task_id
     raw_tasks = database.get_active_tasks()
-    selected_task = next((t for t in raw_tasks if t == t_id), None)
+    selected_task = next((t for t in raw_tasks if t[0] == t_id), None)
 
     if not selected_task:
         st.session_state.selected_task_id = None
@@ -142,9 +160,8 @@ def render_task_details_page():
 
     _, t_title, t_due, t_priority, t_create, t_category, t_notes, t_desc, t_important, t_ref = selected_task
 
-    h_col1, h_col2 = st.columns(2)
-    h_col1.markdown(f"<h2>📋 {t_title} Dashboard Profile</h2>", unsafe_allow_html=True)
-    if h_col2.button("✅ Mark as Complete", type="primary", use_container_width=True):
+    st.markdown(f"<h2>📋 {t_title} Dashboard Profile</h2>", unsafe_allow_html=True)
+    if st.button("✅ Mark as Complete", type="primary", use_container_width=True):
         database.complete_task(t_id)
         st.success("Task shifted out of active pipelines.")
         st.session_state.selected_task_id = None
@@ -169,9 +186,8 @@ def render_task_details_page():
             except ValueError:
                 pass
 
-        col_t1, col_t2 = st.columns(2)
-        updated_due = col_t1.date_input("Alter Target Due Calendar Parameter:", value=parsed_due,
-                                        min_value=datetime.today().date())
+        updated_due = st.date_input("Alter Target Due Calendar Parameter:", value=parsed_due,
+                                    min_value=datetime.today().date())
 
     with tab2:
         st.markdown("### ⚠️ Important Notice Container Layer")
@@ -204,15 +220,9 @@ def render_task_details_page():
 
 
 def render_analytics_dashboard():
-    """Routes the internal interface execution into the primary analytics tracking files."""
     import portals.analytics as analytics
-
-    # 1. First, call your active stopwatch and metric visualizations layer script
     analytics.show_portal()
-
-    # 2. Render a permanent return switch button right below the analytics logs
     st.write("---")
-    if st.button("⬅️ Return to Core Task Dashboard", use_container_width=True, key="global_analytics_return_btn"):
+    if st.button("⬅️ Return to Core Task Dashboard", use_container_width=True):
         st.session_state.view_analytics = False
         st.rerun()
-
